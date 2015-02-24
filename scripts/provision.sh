@@ -10,10 +10,7 @@ apt-get upgrade -y
 
 apt-get install -y software-properties-common
 
-apt-add-repository ppa:nginx/stable -y
-apt-add-repository ppa:rwky/redis -y
 apt-add-repository ppa:chris-lea/node.js -y
-apt-add-repository ppa:ondrej/php5-5.6 -y
 
 # Update Package Lists
 
@@ -24,34 +21,31 @@ apt-get update
 apt-get install -y build-essential curl dos2unix gcc git libmcrypt4 libpcre3-dev \
 make python2.7-dev python-pip re2c supervisor unattended-upgrades whois vim
 
-# Install A Few Helpful Python Packages
-
-pip install httpie
-pip install fabric
-pip install python-simple-hipchat
-
 # Set My Timezone
 
-ln -sf /usr/share/zoneinfo/UTC /etc/localtime
+ln -sf /usr/share/zoneinfo/Europe/Rome /etc/localtime
+
+# Install Apache
+
+apt-get install -y apache2
+
+# Install MySQL
+
+debconf-set-selections <<< "mysql-server mysql-server/root_password password secret"
+debconf-set-selections <<< "mysql-server mysql-server/root_password_again password secret"
+apt-get install -y mysql-server-5.6 php5-mysql
+
+# Install SQLite
+
+apt-get install -y sqlite3 libsqlite3-dev
 
 # Install PHP Stuffs
 
-apt-get install -y php5-cli php5-dev php-pear \
-php5-mysqlnd php5-pgsql php5-sqlite \
-php5-apcu php5-json php5-curl php5-gd \
-php5-gmp php5-imap php5-mcrypt php5-xdebug \
-php5-memcached php5-redis
+apt-get install -y php5 libapache2-mod-php5 \
+php5-mcrypt php5-cli php5-sqlite php5-mcrypt \
+php5-xdebug php5-memcached php5-curl php5-json \
+php5-gd
 
-# Make MCrypt Available
-
-ln -s /etc/php5/conf.d/mcrypt.ini /etc/php5/mods-available
-sudo php5enmod mcrypt
-
-# Install Mailparse PECL Extension
-
-pecl install mailparse
-echo "extension=mailparse.so" > /etc/php5/mods-available/mailparse.ini
-ln -s /etc/php5/mods-available/mailparse.ini /etc/php5/cli/conf.d/20-mailparse.ini
 
 # Install Composer
 
@@ -65,7 +59,7 @@ printf "\nPATH=\"/home/vagrant/.composer/vendor/bin:\$PATH\"\n" | tee -a /home/v
 # Install Laravel Envoy
 
 sudo su vagrant <<'EOF'
-/usr/local/bin/composer global require "laravel/envoy=~1.0"
+/usr/local/bin/composer global require "laravel/envoy=~1.0" "phpunit/phpunit:4.0.*" "codeception/codeception=*" "phpspec/phpspec:2.0.*@dev" "squizlabs/php_codesniffer:1.5.*-"
 EOF
 
 # Set Some PHP CLI Settings
@@ -73,85 +67,41 @@ EOF
 sudo sed -i "s/error_reporting = .*/error_reporting = E_ALL/" /etc/php5/cli/php.ini
 sudo sed -i "s/display_errors = .*/display_errors = On/" /etc/php5/cli/php.ini
 sudo sed -i "s/memory_limit = .*/memory_limit = 512M/" /etc/php5/cli/php.ini
-sudo sed -i "s/;date.timezone.*/date.timezone = UTC/" /etc/php5/cli/php.ini
+sudo sed -i "s/;date.timezone.*/date.timezone = Europe/Rome/" /etc/php5/cli/php.ini
 
-# Install Nginx & PHP-FPM
-
-apt-get install -y nginx php5-fpm
-
-rm /etc/nginx/sites-enabled/default
-rm /etc/nginx/sites-available/default
-service nginx restart
-
-# Add The HHVM Key & Repository
-
-wget -O - http://dl.hhvm.com/conf/hhvm.gpg.key | apt-key add -
-echo deb http://dl.hhvm.com/ubuntu trusty main | tee /etc/apt/sources.list.d/hhvm.list
-apt-get update
-apt-get install -y hhvm
+service apache2 restart
 
 # Configure HHVM To Run As Homestead
 
-service hhvm stop
-sed -i 's/#RUN_AS_USER="www-data"/RUN_AS_USER="vagrant"/' /etc/default/hhvm
-service hhvm start
+#service apache2 stop
+#sed -i 's/#RUN_AS_USER="www-data"/RUN_AS_USER="vagrant"/' /etc/default/hhvm
+#service apache2 start
 
-# Start HHVM On System Start
+# Setup Some PHP Options
 
-update-rc.d hhvm defaults
+#sed -i "s/error_reporting = .*/error_reporting = E_ALL/" /etc/php5/fpm/php.ini
+#sed -i "s/display_errors = .*/display_errors = On/" /etc/php5/fpm/php.ini
+#sed -i "s/;cgi.fix_pathinfo=1/cgi.fix_pathinfo=0/" /etc/php5/fpm/php.ini
+#sed -i "s/memory_limit = .*/memory_limit = 512M/" /etc/php5/fpm/php.ini
+#sed -i "s/;date.timezone.*/date.timezone = Europe/Rome/" /etc/php5/fpm/php.ini
 
-# Setup Some PHP-FPM Options
+#echo "xdebug.remote_enable = 1" >> /etc/php5/fpm/conf.d/20-xdebug.ini
+#echo "xdebug.remote_connect_back = 1" >> /etc/php5/fpm/conf.d/20-xdebug.ini
+#echo "xdebug.remote_port = 9000" >> /etc/php5/fpm/conf.d/20-xdebug.ini
 
-ln -s /etc/php5/mods-available/mailparse.ini /etc/php5/fpm/conf.d/20-mailparse.ini
+# Set The Apache & PHP-FPM User
 
-sed -i "s/error_reporting = .*/error_reporting = E_ALL/" /etc/php5/fpm/php.ini
-sed -i "s/display_errors = .*/display_errors = On/" /etc/php5/fpm/php.ini
-sed -i "s/;cgi.fix_pathinfo=1/cgi.fix_pathinfo=0/" /etc/php5/fpm/php.ini
-sed -i "s/memory_limit = .*/memory_limit = 512M/" /etc/php5/fpm/php.ini
-sed -i "s/;date.timezone.*/date.timezone = UTC/" /etc/php5/fpm/php.ini
+#sed -i "s/user www-data;/user vagrant;/" /etc/nginx/nginx.conf
+#sed -i "s/# server_names_hash_bucket_size.*/server_names_hash_bucket_size 64;/" /etc/nginx/nginx.conf
 
-echo "xdebug.remote_enable = 1" >> /etc/php5/fpm/conf.d/20-xdebug.ini
-echo "xdebug.remote_connect_back = 1" >> /etc/php5/fpm/conf.d/20-xdebug.ini
-echo "xdebug.remote_port = 9000" >> /etc/php5/fpm/conf.d/20-xdebug.ini
+#sed -i "s/user = www-data/user = vagrant/" /etc/php5/fpm/pool.d/www.conf
+#sed -i "s/group = www-data/group = vagrant/" /etc/php5/fpm/pool.d/www.conf
 
-# Copy fastcgi_params to Nginx because they broke it on the PPA
+#sed -i "s/;listen\.owner.*/listen.owner = vagrant/" /etc/php5/fpm/pool.d/www.conf
+#sed -i "s/;listen\.group.*/listen.group = vagrant/" /etc/php5/fpm/pool.d/www.conf
+#sed -i "s/;listen\.mode.*/listen.mode = 0666/" /etc/php5/fpm/pool.d/www.conf
 
-cat > /etc/nginx/fastcgi_params << EOF
-fastcgi_param	QUERY_STRING		\$query_string;
-fastcgi_param	REQUEST_METHOD		\$request_method;
-fastcgi_param	CONTENT_TYPE		\$content_type;
-fastcgi_param	CONTENT_LENGTH		\$content_length;
-fastcgi_param	SCRIPT_FILENAME		\$request_filename;
-fastcgi_param	SCRIPT_NAME		\$fastcgi_script_name;
-fastcgi_param	REQUEST_URI		\$request_uri;
-fastcgi_param	DOCUMENT_URI		\$document_uri;
-fastcgi_param	DOCUMENT_ROOT		\$document_root;
-fastcgi_param	SERVER_PROTOCOL		\$server_protocol;
-fastcgi_param	GATEWAY_INTERFACE	CGI/1.1;
-fastcgi_param	SERVER_SOFTWARE		nginx/\$nginx_version;
-fastcgi_param	REMOTE_ADDR		\$remote_addr;
-fastcgi_param	REMOTE_PORT		\$remote_port;
-fastcgi_param	SERVER_ADDR		\$server_addr;
-fastcgi_param	SERVER_PORT		\$server_port;
-fastcgi_param	SERVER_NAME		\$server_name;
-fastcgi_param	HTTPS			\$https if_not_empty;
-fastcgi_param	REDIRECT_STATUS		200;
-EOF
-
-# Set The Nginx & PHP-FPM User
-
-sed -i "s/user www-data;/user vagrant;/" /etc/nginx/nginx.conf
-sed -i "s/# server_names_hash_bucket_size.*/server_names_hash_bucket_size 64;/" /etc/nginx/nginx.conf
-
-sed -i "s/user = www-data/user = vagrant/" /etc/php5/fpm/pool.d/www.conf
-sed -i "s/group = www-data/group = vagrant/" /etc/php5/fpm/pool.d/www.conf
-
-sed -i "s/;listen\.owner.*/listen.owner = vagrant/" /etc/php5/fpm/pool.d/www.conf
-sed -i "s/;listen\.group.*/listen.group = vagrant/" /etc/php5/fpm/pool.d/www.conf
-sed -i "s/;listen\.mode.*/listen.mode = 0666/" /etc/php5/fpm/pool.d/www.conf
-
-service nginx restart
-service php5-fpm restart
+service apache2 restart
 
 # Add Vagrant User To WWW-Data
 
@@ -166,16 +116,6 @@ npm install -g grunt-cli
 npm install -g gulp
 npm install -g bower
 
-# Install SQLite
-
-apt-get install -y sqlite3 libsqlite3-dev
-
-# Install MySQL
-
-debconf-set-selections <<< "mysql-server mysql-server/root_password password secret"
-debconf-set-selections <<< "mysql-server mysql-server/root_password_again password secret"
-apt-get install -y mysql-server-5.6
-
 # Configure MySQL Remote Access
 
 sed -i '/^bind-address/s/bind-address.*=.*/bind-address = 10.0.2.15/' /etc/mysql/my.cnf
@@ -189,26 +129,9 @@ mysql --user="root" --password="secret" -e "FLUSH PRIVILEGES;"
 mysql --user="root" --password="secret" -e "CREATE DATABASE homestead;"
 service mysql restart
 
-# Install Postgres
-
-apt-get install -y postgresql postgresql-contrib
-
-# Configure Postgres Remote Access
-
-sed -i "s/#listen_addresses = 'localhost'/listen_addresses = '*'/g" /etc/postgresql/9.3/main/postgresql.conf
-echo "host    all             all             10.0.2.2/32               md5" | tee -a /etc/postgresql/9.3/main/pg_hba.conf
-sudo -u postgres psql -c "CREATE ROLE homestead LOGIN UNENCRYPTED PASSWORD 'secret' SUPERUSER INHERIT NOCREATEDB NOCREATEROLE NOREPLICATION;"
-sudo -u postgres /usr/bin/createdb --echo --owner=homestead homestead
-service postgresql restart
-
 # Install A Few Other Things
 
-apt-get install -y redis-server memcached beanstalkd
-
-# Configure Beanstalkd
-
-sudo sed -i "s/#START=yes/START=yes/" /etc/default/beanstalkd
-sudo /etc/init.d/beanstalkd start
+apt-get install -y memcached tmux
 
 # Write Bash Aliases
 
